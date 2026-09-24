@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Financial Review</title>
+    <style>
+        body {
+            margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white; min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2); padding: 25px; margin-bottom: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        h1, h2 { margin-top: 0; }
+        button {
+            background: linear-gradient(to right, #00c6ff, #0072ff); border: none; color: white; 
+            padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,200,255,0.4); }
+        input[type="file"], input[type="text"] {
+            padding: 10px; border-radius: 5px; border: none; outline: none; margin-right: 10px;
+        }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        th { background: rgba(0,0,0,0.2); }
+        .result-box {
+            margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); 
+            border-radius: 5px; display: none; line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>NYC Restaurant Co. - AI Financial Dashboard</h1>
+
+    <div class="glass-card">
+        <h2>1. Data Ingestion</h2>
+        <input type="file" id="fileInput" accept=".xlsx">
+        <button onclick="uploadFile()">Upload Excel</button>
+        <p id="uploadStatus"></p>
+    </div>
+
+    <div class="glass-card">
+        <h2>2. AI Categorization</h2>
+        <button onclick="categorizeData()">Run AI Categorization</button>
+        <p id="catStatus"></p>
+    </div>
+
+    <div class="glass-card">
+        <h2>3. Monthly P&L Report</h2>
+        <button onclick="fetchPnL()">Generate Report</button>
+        <div id="pnlResult" class="result-box"></div>
+    </div>
+
+
+    <div class="glass-card">
+        <h2>4. AI Financial Analyst (Chat)</h2>
+        <input type="text" id="chatInput" placeholder="E.g., What was the revenue in Jan?" style="width: 60%;">
+        <button onclick="askChat()">Ask AI</button>
+        <div id="chatResult" class="result-box"></div>
+    </div>
+
+
+    <div class="glass-card">
+        <h2>5. Variance Analysis</h2>
+        <input type="text" id="curMonth" placeholder="Current Month (e.g., 2026-03)">
+        <input type="text" id="prevMonth" placeholder="Previous Month (e.g., 2026-01)">
+        <button onclick="getVariance()">Analyze Variance</button>
+        <div id="varResult" class="result-box"></div>
+    </div>
+
+    <script>
+        const baseUrl = "http://127.0.0.1:8000";
+
+        // 1. Upload
+        async function uploadFile() {
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) { alert("Please select a file first."); return; }
+            const formData = new FormData(); formData.append("file", file);
+            document.getElementById("uploadStatus").innerText = "Uploading...";
+            try {
+                let res = await fetch(`${baseUrl}/upload`, { method: "POST", body: formData });
+                let data = await res.json();
+                document.getElementById("uploadStatus").innerText = data.message || data.error;
+            } catch (e) { document.getElementById("uploadStatus").innerText = "Upload failed."; }
+        }
+
+        // 2. Categorize
+        async function categorizeData() {
+            document.getElementById("catStatus").innerText = "AI is categorizing... Please wait.";
+            try {
+                let res = await fetch(`${baseUrl}/categorize`, { method: "POST" });
+                let data = await res.json();
+                document.getElementById("catStatus").innerText = data.message || data.error;
+            } catch (e) { document.getElementById("catStatus").innerText = "Categorization failed."; }
+        }
+
+        // 3. P&L Report
+        async function fetchPnL() {
+            const resBox = document.getElementById("pnlResult");
+            resBox.style.display = "block";
+            resBox.innerText = "Loading P&L...";
+            try {
+                let res = await fetch(`${baseUrl}/pnl`);
+                let data = await res.json();
+                if(data.monthly_pnl) {
+                    let html = "<table><tr><th>Month</th><th>Revenue</th><th>COGS</th><th>Gross Profit</th><th>Payroll</th><th>OpEx</th><th>Op Profit</th></tr>";
+                    for (let month in data.monthly_pnl) {
+                        let m = data.monthly_pnl[month];
+                        html += `<tr><td>${month}</td><td>$${m.Revenue}</td><td>$${m["Cost of Goods Sold"]}</td>
+                                <td>$${m["Gross Profit"]}</td><td>$${m.Payroll}</td><td>$${m["Operating Expenses"]}</td>
+                                <td><strong>$${m["Operating Profit"]}</strong></td></tr>`;
+                    }
+                    html += "</table>";
+                    resBox.innerHTML = html;
+                } else { resBox.innerText = "No data found. Run categorization first."; }
+            } catch (e) { resBox.innerText = "Failed to load P&L."; }
+        }
+
+        // 4. AI Chat
+        async function askChat() {
+            const q = document.getElementById("chatInput").value;
+            if(!q) return;
+            const resBox = document.getElementById("chatResult");
+            resBox.style.display = "block";
+            resBox.innerText = "AI is thinking...";
+            try {
+                let res = await fetch(`${baseUrl}/chat`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({question: q})
+                });
+                let data = await res.json();
+                resBox.innerText = data.answer || data.error;
+            } catch (e) { resBox.innerText = "Error connecting to Chat API."; }
+        }
+
+        // 5. Variance Analysis
+        async function getVariance() {
+            const cur = document.getElementById("curMonth").value;
+            const prev = document.getElementById("prevMonth").value;
+            if(!cur || !prev) { alert("Please enter both months."); return; }
+            
+            const resBox = document.getElementById("varResult");
+            resBox.style.display = "block";
+            resBox.innerText = "AI is analyzing variance... Please wait.";
+            try {
+                let res = await fetch(`${baseUrl}/variance`, {
+                    method: "POST", headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({current_month: cur, previous_month: prev})
+                });
+                let data = await res.json();
+                if(data.error) {
+                    resBox.innerText = data.error;
+                } else {
+                    resBox.innerHTML = `<strong>Numerical Variances:</strong><br><pre style="background:rgba(0,0,0,0.3); padding:10px; border-radius:5px;">${JSON.stringify(data.numerical_variances, null, 2)}</pre>
+                                        <br><strong>AI Explanation:</strong><br>${data.ai_explanation}`;
+                }
+            } catch (e) { resBox.innerText = "Error connecting to Variance API."; }
+        }
+    </script>
+</body>
+</html>
